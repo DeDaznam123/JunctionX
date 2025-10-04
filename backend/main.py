@@ -12,23 +12,16 @@ from backend.processors.noisereduce_nr import denoise_noisereduce
 from backend.processors.vocal_extract import extract_vocals_hpss
 from backend.processors.transcribe import transcribe_to_segments
 
-app = FastAPI(title="Extremism-Screener API (minimal preprocess)")
-
-@app.get("/debug_transcode")
-def debug_transcode(direct_url: str):
-    with tempfile.TemporaryDirectory() as td:
-        wav = url_to_wav(direct_url, Path(td), sr=16000)
-        return {"ok": True, "wav": str(wav.name)}
+app = FastAPI(title="Extremism Screener API")
 
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
 
-@app.get("/analyze")
+@app.post("/analyze")
 def preprocess_link(
     link: str = Query(..., description="Page link to a video/audio (e.g. reddit/youtube)."),
     strength: str = Query("light", regex="^(light|strong)$"),
-    download: bool = Query(False, description="If true, return cleaned WAV file; else JSON."),
     model_size: str = Query("small.en"),
 ):
     try:
@@ -55,12 +48,6 @@ def preprocess_link(
             transcript = segs
         except Exception as e:
             raise HTTPException(500, f"transcription failed: {e}")
-
-        if download:
-            outdir = Path("outputs"); outdir.mkdir(parents=True, exist_ok=True)
-            final_path = outdir / cleaned.name
-            shutil.copy2(cleaned, final_path)
-            return FileResponse(str(final_path), filename=final_path.name, media_type="audio/wav")
 
         return JSONResponse({
             "status": "OK",
