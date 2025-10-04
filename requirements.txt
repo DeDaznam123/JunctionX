@@ -47,3 +47,8 @@ webrtcvad
 librosa
 faster_whisper
 tqdm
+
+streamlit
+requests
+pandas
+streamlit-cookies-manager

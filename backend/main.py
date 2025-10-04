@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi import Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.background import BackgroundTask
 import shutil, os, tempfile
 from pathlib import Path
@@ -18,6 +18,12 @@ app = FastAPI(title="Extremism Screener API")
 def healthz():
     return {"ok": True}
 
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
+
+
+
 @app.post("/analyze")
 def preprocess_link(
     link: str = Query(..., description="Page link to a video/audio (e.g. reddit/youtube)."),
@@ -26,42 +32,27 @@ def preprocess_link(
     chunk_length: int = Query(30),
 ):
     try:
-        media_url = extract_audio_from_link(link)
-        print("INFO: Medial URL extracted")
-    except Exception as e:
-        raise HTTPException(400, detail=f"Failed to resolve media URL: {e}")
+        # This now returns (audio_path, media_url, title)
+        processed_audio_path, resolved_media_url, video_title = extract_audio_from_link(link)
 
-    with tempfile.TemporaryDirectory() as td:
-        td = Path(td)
-        # URL to WAV
-        wav = url_to_wav(media_url, td, sr=16000)
-        print("INFO: Video downloaded from URL and transformed to .WAV")
-        # Extract vocal
-        wav = extract_vocals_hpss(wav)
-        print("INFO: Vocal extracted from audio")
-        # Denoise
-        cleaned = denoise_noisereduce(wav, strength=strength)
-        print("INFO: Audio denoised")
-        # Transcribe
-        transcript = None
-        info = None
-        try:
-            segs, info = transcribe_to_segments(
-                str(cleaned),
-                model_size=model_size,
-                chunk_length=chunk_length,
-            )
-            transcript = segs
-        except Exception as e:
-            raise HTTPException(500, f"transcription failed: {e}")
-        info("INFO: Audio transcribed")
-        return JSONResponse({
-            "status": "OK",
-            "resolved_media_url": media_url,
-            "outputs": {"wav_16k": cleaned.name},
-            "transcription": transcript,
-            "info": info,
-            "next_steps": [
-                "Tune thresholds & add classifier later."
-            ]
-        })
+        # Denoise the audio
+        denoised_audio_path = denoise_noisereduce(processed_audio_path, strength)
+
+        # Transcribe the denoised audio
+        transcription_data = transcribe_to_segments(denoised_audio_path, model_size, chunk_length)
+
+        # Clean up the temporary audio files
+        os.remove(processed_audio_path)
+        os.remove(denoised_audio_path)
+
+        return {
+            "message": "Analysis successful",
+            "video_title": video_title,
+            "resolved_media_url": resolved_media_url,
+            "transcription": transcription_data
+        }
+    except Exception as e:
+        # Log the exception for debugging
+        print(f"An error occurred during analysis: {e}")
+        # Optionally, re-raise as an HTTPException to send a specific error response
+        raise HTTPException(status_code=500, detail=str(e))
