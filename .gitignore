@@ -7,7 +7,6 @@ lib/
 pyvenv.cfg
 Include/
 Lib/
-Scripts/
 # python
 __pycache__/
 *.pyc
