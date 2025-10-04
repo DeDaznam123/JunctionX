@@ -45,3 +45,4 @@ numpy
 noisereduce
 webrtcvad
 librosa
+faster_whisper
