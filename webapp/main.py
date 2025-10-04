@@ -57,7 +57,7 @@ def preprocess_link(
                 path=str(final_path),
                 filename=cleaned.name,
                 media_type="audio/wav",
-                background=task,   # remove if you want to keep the file
+                background=task,
             )
 
         # else: JSON metadata only
