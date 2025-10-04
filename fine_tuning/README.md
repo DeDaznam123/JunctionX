@@ -64,15 +64,44 @@ Output:
 - `data/test.csv`
 - `data/label_info.json`
 
-### Step 2: Train the Model
+### Step 2: Setup GPU (Recommended)
 
-Train the model with default hyperparameters:
+**For NVIDIA GPU users** (including Blackwell architecture):
+
+Run the GPU setup script to install CUDA-enabled PyTorch:
+```bash
+.\setup_gpu.ps1
+```
+
+This ensures your GPU is properly configured for fast training. See [GPU_TRAINING_GUIDE.md](GPU_TRAINING_GUIDE.md) for detailed instructions.
+
+### Step 3: Train the Model
+
+**With GPU (Recommended - 10-20x faster):**
+
+```bash
+# For NVIDIA Blackwell or modern GPUs (best performance)
+python train_model.py \
+  --data_dir ./data \
+  --output_dir ./outputs \
+  --bf16 \
+  --batch_size 32
+
+# For older GPUs or if bf16 not supported
+python train_model.py \
+  --data_dir ./data \
+  --output_dir ./outputs \
+  --fp16 \
+  --batch_size 32
+```
+
+**Without GPU (slower):**
 
 ```bash
 python train_model.py --data_dir ./data --output_dir ./outputs
 ```
 
-Or with custom parameters:
+**Advanced options:**
 
 ```bash
 python train_model.py \
@@ -80,13 +109,16 @@ python train_model.py \
   --data_dir ./data \
   --output_dir ./outputs \
   --num_epochs 5 \
-  --batch_size 16 \
+  --batch_size 32 \
   --learning_rate 2e-5 \
   --max_length 512 \
-  --fp16
+  --bf16
 ```
 
-**Note**: Use `--fp16` flag if you have a CUDA-enabled GPU for faster training.
+**Mixed Precision Options:**
+- `--bf16`: BFloat16 precision (recommended for NVIDIA Blackwell, Hopper, Ampere GPUs)
+- `--fp16`: Float16 precision (good for older GPUs)
+- No flag: Full FP32 precision (slowest, most precise)
 
 Training outputs:
 - `outputs/best_model/`: Best model checkpoint
@@ -94,7 +126,7 @@ Training outputs:
 - `outputs/test_results.json`: Test set evaluation metrics
 - `outputs/logs/`: TensorBoard logs
 
-### Step 3: Monitor Training (Optional)
+### Step 4: Monitor Training (Optional)
 
 Monitor training progress with TensorBoard:
 
@@ -102,7 +134,12 @@ Monitor training progress with TensorBoard:
 tensorboard --logdir ./outputs/logs
 ```
 
-### Step 4: Evaluate the Model
+Monitor GPU usage (if using GPU):
+```bash
+nvidia-smi -l 1
+```
+
+### Step 5: Evaluate the Model
 
 Run comprehensive evaluation on the test set:
 

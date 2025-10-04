@@ -25,6 +25,7 @@ from sklearn.metrics import (
 )
 from transformers import AutoTokenizer
 from train_model import MultiLabelRobertaWithConstraints, HateSpeechDataset
+from tqdm.auto import tqdm
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -131,7 +132,7 @@ class ModelEvaluator:
         all_probs = []
         
         with torch.no_grad():
-            for batch in dataloader:
+            for batch in tqdm(dataloader, desc="Predicting", unit="batch"):
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
                 labels = batch['labels'].cpu().numpy()
