@@ -6,12 +6,12 @@ import shutil, os, tempfile
 from pathlib import Path
 import tempfile
 
-from scripts.video_processing import extract_audio_from_link  # <- teammate's function
+from webapp.utils.video_processing import extract_audio_from_link
 from webapp.utils.audio_io import url_to_wav
 from webapp.processors.noisereduce_nr import denoise_noisereduce
+from webapp.processors.vocal_extract import extract_vocals_hpss
 
 app = FastAPI(title="Extremism-Screener API (minimal preprocess)")
-import os, subprocess
 
 @app.get("/debug_transcode")
 def debug_transcode(direct_url: str):
@@ -26,7 +26,6 @@ def healthz():
 @app.get("/analyze")
 def preprocess_link(
     link: str = Query(..., description="Page link to a video/audio (e.g. reddit/youtube)."),
-    denoise: bool = Query(True),
     strength: str = Query("light", regex="^(light|strong)$"),
     download: bool = Query(False, description="If true, return cleaned WAV file; else JSON.")
 ):
@@ -43,7 +42,7 @@ def preprocess_link(
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
         wav = url_to_wav(media_url, td, sr=16000)
-        # optional: wav = vad_trim(wav)
+        wav = extract_vocals_hpss(wav)
         cleaned = denoise_noisereduce(wav, strength=strength)
 
         if download:

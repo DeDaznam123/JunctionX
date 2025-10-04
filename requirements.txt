@@ -44,3 +44,4 @@ soundfile
 numpy
 noisereduce
 webrtcvad
+librosa
