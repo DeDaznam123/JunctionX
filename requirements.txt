@@ -46,3 +46,4 @@ noisereduce
 webrtcvad
 librosa
 faster_whisper
+tqdm

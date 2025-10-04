@@ -23,6 +23,7 @@ def preprocess_link(
     link: str = Query(..., description="Page link to a video/audio (e.g. reddit/youtube)."),
     strength: str = Query("light", regex="^(light|strong)$"),
     model_size: str = Query("small.en"),
+    chunk_length: int = Query(30),
 ):
     try:
         media_url = extract_audio_from_link(link)
@@ -44,6 +45,7 @@ def preprocess_link(
             segs, info = transcribe_to_segments(
                 str(cleaned),
                 model_size=model_size,
+                chunk_length=chunk_length,
             )
             transcript = segs
         except Exception as e:
