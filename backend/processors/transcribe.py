@@ -1,21 +1,44 @@
 from typing import List, Dict, Tuple
-from faster_whisper import WhisperModel
+from faster_whisper import WhisperModel, BatchedInferencePipeline
 from tqdm import tqdm
+import os
 
-_MODEL = None
+# --- Prevent BLAS/OpenMP oversubscription (good for CPU; harmless on GPU) ---
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
 
-def _get_model(model_size: str = "medium.en") -> WhisperModel:
-    global _MODEL
-    if _MODEL is None:
-        # Try GPU first, fallback to CPU if CUDA isn't available
-        try:
-            print(f"[faster-whisper] init device=cuda, compute_type=float16, model={model_size}")
-            _MODEL = WhisperModel(model_size, device="cuda", compute_type="float16")
-        except Exception as e:
-            print(f"[faster-whisper] CUDA not available ({e}), falling back to CPU")
-            print(f"[faster-whisper] init device=cpu, compute_type=int8, model={model_size}")
-            _MODEL = WhisperModel(model_size, device="cpu", compute_type="int8")
-    return _MODEL
+_MODEL: WhisperModel | None = None
+_PIPELINE: BatchedInferencePipeline | None = None
+GPU: bool | None = None
+
+# Workers: default = all logical CPUs; allow override via env
+MAX_WORKERS = max(1, os.cpu_count() or 4)
+try:
+    if "ASR_MAX_WORKERS" in os.environ:
+        MAX_WORKERS = max(1, int(os.environ["ASR_MAX_WORKERS"]))
+except ValueError:
+    pass
+
+def _ensure_pipeline(model_size: str = "small.en") -> BatchedInferencePipeline:
+    """Lazy-init a single pipeline (GPU first, CPU fallback)."""
+    global _PIPELINE, GPU
+    if _PIPELINE is not None:
+        return _PIPELINE
+
+    # Try GPU first
+    try:
+        print(f"[faster-whisper] init device=cuda, compute_type=float16, model={model_size}")
+        model = WhisperModel(model_size, device="cuda", compute_type="float16")
+        GPU = True
+    except Exception as e:
+        print(f"[faster-whisper] CUDA not available ({e}); falling back to CPU")
+        GPU = False
+        print(f"[faster-whisper] init device=cpu, compute_type=int8, cpu_threads={MAX_WORKERS}, model={model_size}")
+        model = WhisperModel(model_size, device="cpu", compute_type="int8", cpu_threads=MAX_WORKERS)
+
+    _PIPELINE = BatchedInferencePipeline(model=model)
+    print(f"[faster-whisper] Batched pipeline ready (runtime={'GPU' if GPU else 'CPU'})")
+    return _PIPELINE
 
 def transcribe_to_segments(
     audio_path: str,
@@ -29,38 +52,45 @@ def transcribe_to_segments(
     segments_list: [{start, end, text}]
     show_progress: whether to display a tqdm progress bar
     """
-    model = _get_model(model_size)
+    pipe = _ensure_pipeline(model_size)
+
+    # Cap batch size a bit on CPU to avoid diminishing returns
+    if GPU:
+        batch_size = min(4, MAX_WORKERS)
+    else:
+        batch_size = 1 
 
     # Create progress bar if requested
     pbar = None
     if show_progress:
         pbar = tqdm(desc="Transcribing", unit="seg", dynamic_ncols=True)
 
-    segments, info = model.transcribe(
-        audio_path,
+    common = dict(
         language="en",
-        # keep sentence timestamps from segment boundaries
         beam_size=1,
         best_of=1,
-        word_timestamps=False,          # keeps it fast; segment timestamps still present
+        word_timestamps=False,
         vad_filter=True,
-        vad_parameters=dict(            # tune to avoid mid-sentence chops
-            min_silence_duration_ms=600,   # raise to merge short pauses
-            min_speech_duration_ms=250,    # lower if speech is choppy
-            speech_pad_ms=100              # small padding helps sentence continuity
+        vad_parameters=dict(
+            min_silence_duration_ms=600,
+            min_speech_duration_ms=250,
+            speech_pad_ms=100
         ),
-        chunk_length=chunk_length,                # seconds; good CPU/GIL balance
+        chunk_length=chunk_length,
         condition_on_previous_text=False,
         temperature=0.0,
-        no_speech_threshold=0.45,       # slightly stricter: skip very quiet parts
-        log_prob_threshold=-1.0,        # avoid fallback decoding
+        no_speech_threshold=0.45,
+        log_prob_threshold=-1.0,
         compression_ratio_threshold=2.4,
         hallucination_silence_threshold=0.5,
     )
 
-    # --- Merge decoder segments into sentences (timestamps preserved) ---
+    # Parallelized for both CPU/GPU
+    segments, info = pipe.transcribe(audio_path, batch_size=batch_size, **common)
+
+    # --- Merge decoder segments into sentence-level spans ---
     PUNCT = ('.', '!', '?')
-    SILENCE_GAP = 0.7  # seconds; start new sentence if a large pause occurs
+    SILENCE_GAP = 0.7
 
     out_segments: List[Dict] = []
     cur_start = None
@@ -69,15 +99,12 @@ def transcribe_to_segments(
     prev_end = None
 
     for s in segments:
-        # Update progress bar
         if pbar is not None:
             pbar.update(1)
             pbar.set_postfix({"time": f"{s.end:.1f}s"})
 
-        # each s has s.start/s.end (segment timestamps from the model)
         gap = (s.start - prev_end) if prev_end is not None else 0.0
 
-        # long pause → flush current sentence
         if cur_text_parts and gap is not None and gap > SILENCE_GAP:
             out_segments.append({
                 "start": float(cur_start),
@@ -86,14 +113,12 @@ def transcribe_to_segments(
             })
             cur_start, cur_end, cur_text_parts = None, None, []
 
-        # initialize/extend sentence
         if cur_start is None:
             cur_start = float(s.start)
         cur_end = float(s.end)
         cur_text_parts.append(s.text.strip())
         prev_end = s.end
 
-        # if segment ends with sentence punctuation → flush as sentence
         if s.text.strip().endswith(PUNCT):
             out_segments.append({
                 "start": float(cur_start),
@@ -102,7 +127,6 @@ def transcribe_to_segments(
             })
             cur_start, cur_end, cur_text_parts = None, None, []
 
-    # flush trailing
     if cur_text_parts:
         out_segments.append({
             "start": float(cur_start),
@@ -110,7 +134,6 @@ def transcribe_to_segments(
             "text": " ".join(cur_text_parts).strip(),
         })
 
-    # Close progress bar
     if pbar is not None:
         pbar.close()
 
@@ -119,5 +142,9 @@ def transcribe_to_segments(
         "language": info.language,
         "language_probability": float(info.language_probability) if info.language_probability else None,
         "model_size": model_size,
+        "gpu": bool(GPU),
+        "max_workers": MAX_WORKERS,
+        "batch_size": batch_size,
+        "chunk_length": chunk_length,
     }
     return out_segments, info_dict
