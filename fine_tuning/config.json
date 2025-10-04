@@ -1,0 +1,63 @@
+{
+  "model": {
+    "name": "unbiased-toxic-roberta",
+    "num_labels": 11,
+    "max_length": 512,
+    "dropout": 0.1
+  },
+  "training": {
+    "num_epochs": 3,
+    "batch_size": 16,
+    "learning_rate": 2e-5,
+    "warmup_ratio": 0.1,
+    "weight_decay": 0.01,
+    "gradient_accumulation_steps": 1,
+    "max_grad_norm": 1.0,
+    "fp16": false,
+    "seed": 42
+  },
+  "data": {
+    "train_file": "data/train.csv",
+    "val_file": "data/val.csv",
+    "test_file": "data/test.csv",
+    "test_size": 0.15,
+    "val_size": 0.15
+  },
+  "evaluation": {
+    "eval_strategy": "epoch",
+    "save_strategy": "epoch",
+    "metric_for_best_model": "f1_micro",
+    "greater_is_better": true,
+    "save_total_limit": 2
+  },
+  "labels": {
+    "primary_label": {
+      "name": "primary_label",
+      "type": "binary",
+      "classes": ["nothate", "hate"],
+      "description": "Primary classification: hate or not-hate (mutually exclusive)"
+    },
+    "secondary_labels": {
+      "names": [
+        "Incitement of Violence",
+        "Praising violence",
+        "Praising extremist acts",
+        "Targeting ethnic or racial groups",
+        "Ideologically motivated threats",
+        "Anti-democratic rhetoric",
+        "Personal Attacks",
+        "Sexual harassment",
+        "Physical violence",
+        "Psychological attacks"
+      ],
+      "type": "multi-label",
+      "description": "Secondary labels only applicable when primary_label is hate",
+      "constraint": "All secondary labels must be 0 when primary_label is nothate"
+    }
+  },
+  "paths": {
+    "data_dir": "./data",
+    "output_dir": "./outputs",
+    "evaluation_dir": "./evaluation_results"
+  }
+}
