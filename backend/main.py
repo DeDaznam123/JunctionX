@@ -27,6 +27,7 @@ def preprocess_link(
 ):
     try:
         media_url = extract_audio_from_link(link)
+        print("INFO: Medial URL extracted")
     except Exception as e:
         raise HTTPException(400, detail=f"Failed to resolve media URL: {e}")
 
@@ -34,10 +35,13 @@ def preprocess_link(
         td = Path(td)
         # URL to WAV
         wav = url_to_wav(media_url, td, sr=16000)
+        print("INFO: Video downloaded from URL and transformed to .WAV")
         # Extract vocal
         wav = extract_vocals_hpss(wav)
+        print("INFO: Vocal extracted from audio")
         # Denoise
         cleaned = denoise_noisereduce(wav, strength=strength)
+        print("INFO: Audio denoised")
         # Transcribe
         transcript = None
         info = None
@@ -50,7 +54,7 @@ def preprocess_link(
             transcript = segs
         except Exception as e:
             raise HTTPException(500, f"transcription failed: {e}")
-
+        info("INFO: Audio transcribed")
         return JSONResponse({
             "status": "OK",
             "resolved_media_url": media_url,
