@@ -29,11 +29,6 @@ def preprocess_link(
     strength: str = Query("light", regex="^(light|strong)$"),
     download: bool = Query(False, description="If true, return cleaned WAV file; else JSON.")
 ):
-    """
-    1) Resolve direct media URL via teammate's yt-dlp helper.
-    2) Transcode to 16k mono WAV (ffmpeg).
-    3) Denoise with noisereduce (optional).
-    """
     try:
         media_url = extract_audio_from_link(link)
     except Exception as e:
