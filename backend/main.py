@@ -6,10 +6,10 @@ import shutil, os, tempfile
 from pathlib import Path
 import tempfile
 
-from webapp.utils.video_processing import extract_audio_from_link
-from webapp.utils.audio_io import url_to_wav
-from webapp.processors.noisereduce_nr import denoise_noisereduce
-from webapp.processors.vocal_extract import extract_vocals_hpss
+from backend.utils.video_processing import extract_audio_from_link
+from backend.utils.audio_io import url_to_wav
+from backend.processors.noisereduce_nr import denoise_noisereduce
+from backend.processors.vocal_extract import extract_vocals_hpss
 
 app = FastAPI(title="Extremism-Screener API (minimal preprocess)")
 
