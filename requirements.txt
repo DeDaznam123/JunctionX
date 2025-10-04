@@ -37,3 +37,6 @@ tzdata==2025.2
 urllib3==2.5.0
 watchdog==6.0.0
 yt-dlp==2025.9.26
+fastapi
+uvicorn[standard]
+pydantic
