@@ -40,3 +40,7 @@ yt-dlp==2025.9.26
 fastapi
 uvicorn[standard]
 pydantic
+soundfile
+numpy
+noisereduce
+webrtcvad
