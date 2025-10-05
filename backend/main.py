@@ -12,14 +12,12 @@ from backend.processors.noisereduce_nr import denoise_noisereduce
 from backend.processors.vocal_extract import extract_vocals_hpss
 from backend.processors.transcribe import transcribe_to_segments
 from backend.classifiers.ai_classifier import HateSpeechClassifier
+
 clf = HateSpeechClassifier(
-    global_threshold=0.57,
-    label_thresholds={"Racist": 0.62, "Personal Attacks": 0.52},
-    smoothing_window=1,            # look at previous and next segment
-    smoothing_mode="weighted",     # "mean" is simpler; "weighted" often best
-    smoothing_weight_center=0.6,   # center more important
-    smoothing_weight_neighbor=0.2, # each neighbor
-    short_segment_penalty=0.05     # combats 1–2 word spikes
+    model_name="MoritzLaurer/deberta-v3-large-zeroshot-v2.0",
+    global_threshold=0.52,
+    escape_high_conf=0.82,
+    smoothing_window=0,
 )
 
 app = FastAPI(title="Extremism Screener API")
@@ -31,14 +29,6 @@ def healthz():
 @app.get("/")
 async def root():
     return RedirectResponse(url="/docs")
-
-
-
-@app.get("/")
-async def root():
-    return RedirectResponse(url="/docs")
-
-
 
 @app.post("/analyze")
 def preprocess_link(
@@ -54,7 +44,6 @@ def preprocess_link(
     denoised_audio_path = None
 
     try:
-        # This now returns (audio_path, media_url, title)
         print(f"[INFO] Extracting audio from: {link}")
         processed_audio_path, resolved_media_url, video_title = extract_audio_from_link(link)
 
@@ -74,12 +63,22 @@ def preprocess_link(
             os.remove(processed_audio_path)
         if denoised_audio_path and os.path.exists(denoised_audio_path):
             os.remove(denoised_audio_path)
+        
+        # Classify
+        try:
+            hateful_segments = clf.extract_hateful(segments_list or [])
+        except Exception as e:
+            # Don't break your existing flow; just log and return empty list
+            print(f"ERROR: classification failed: {e}")
+            hateful_segments = []
+
+        print(f"[INFO] Analysis complete. Hateful segments count = {len(hateful_segments)}.")
 
         return {
             "message": "Analysis successful",
             "video_title": video_title,
             "resolved_media_url": resolved_media_url,
-            "transcription": segments_list,
+            "transcription": hateful_segments,
             "transcription_info": transcription_info
         }
     except Exception as e:
@@ -101,9 +100,8 @@ def preprocess_link(
         error_msg = str(e)
         if "allocate" in error_msg.lower() or "memory" in error_msg.lower():
             error_msg = "Memory error during processing. The audio file may be too long or corrupted."
-
-        # Re-raise as an HTTPException to send a specific error response
-        raise HTTPException(status_code=500, detail=error_msg)
+            # Re-raise as an HTTPException to send a specific error response
+            raise HTTPException(status_code=500, detail=error_msg)
         # Clean up temporary files on error
         try:
             if processed_audio_path and os.path.exists(processed_audio_path):
@@ -122,51 +120,5 @@ def preprocess_link(
         error_msg = str(e)
         if "allocate" in error_msg.lower() or "memory" in error_msg.lower():
             error_msg = "Memory error during processing. The audio file may be too long or corrupted."
-
-        # Re-raise as an HTTPException to send a specific error response
-        raise HTTPException(status_code=500, detail=error_msg)
-        raise HTTPException(400, detail=f"Failed to resolve media URL: {e}")
-
-    with tempfile.TemporaryDirectory() as td:
-        td = Path(td)
-        # URL to WAV
-        wav = url_to_wav(media_url, td, sr=16000)
-        print("INFO: Video downloaded from URL and transformed to .WAV")
-        # Extract vocal
-        wav = extract_vocals_hpss(wav)
-        print("INFO: Vocal extracted from audio")
-        # Denoise
-        cleaned = denoise_noisereduce(wav, strength=strength)
-        print("INFO: Audio denoised")
-        # Transcribe
-        transcript = None
-        info = None
-        try:
-            segs, info = transcribe_to_segments(
-                str(cleaned),
-                model_size=model_size,
-                chunk_length=chunk_length,
-            )
-            transcript = segs
-        except Exception as e:
-            raise HTTPException(500, f"transcription failed: {e}")
-        info("INFO: Audio transcribed")
-        # Classify
-        try:
-            hateful_segments = clf.extract_hateful(transcript or [])
-        except Exception as e:
-            # Don't break your existing flow; just log and return empty list
-            print(f"ERROR: classification failed: {e}")
-            hateful_segments = []
-
-        return JSONResponse({
-            "status": "OK",
-            "resolved_media_url": media_url,
-            "outputs": {"wav_16k": cleaned.name},
-            "transcription": transcript,
-            "hateful_segments": hateful_segments,   # <— added field (non-breaking)
-            "info": info,
-            "next_steps": [
-                "Tune thresholds & add classifier later."
-            ]
-        })
+            # Re-raise as an HTTPException to send a specific error response
+    raise HTTPException(status_code=500, detail=error_msg)

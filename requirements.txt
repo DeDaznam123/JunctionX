@@ -61,4 +61,6 @@ typing-extensions>=4.12
 streamlit
 requests
 pandas
+hf_xet
+
 streamlit-cookies-manager
