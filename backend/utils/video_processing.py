@@ -23,18 +23,16 @@ def extract_audio_from_link(link: str):
         downloaded_file = ydl.prepare_filename(info).replace(info['ext'], 'wav')
         title = info.get('title', 'Untitled Analysis')
 
-        # To get a direct media URL, we extract info again without downloading
         stream_info = ydl.extract_info(link, download=False)
         resolved_media_url = None
         if 'url' in stream_info:
             resolved_media_url = stream_info['url']
         elif 'formats' in stream_info:
-            # Find the best audio stream URL
             audio_formats = [f for f in stream_info['formats'] if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
             if audio_formats:
                 best_audio = max(audio_formats, key=lambda f: f.get('abr', 0))
                 resolved_media_url = best_audio['url']
-            else: # Fallback to the first format's url if no dedicated audio stream
+            else: 
                 resolved_media_url = stream_info['formats'][0]['url']
 
     return downloaded_file, resolved_media_url, title

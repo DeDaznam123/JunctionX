@@ -47,28 +47,23 @@ def preprocess_link(
         print(f"[INFO] Extracting audio from: {link}")
         processed_audio_path, resolved_media_url, video_title = extract_audio_from_link(link)
 
-        # Denoise the audio
         print(f"[INFO] Denoising audio with strength: {strength}")
         denoised_audio_path = denoise_noisereduce(processed_audio_path, strength)
 
         print(f"[INFO] Audio denoised: {denoised_audio_path}")
 
-        # Transcribe the denoised audio
         print(f"[INFO] Transcribing audio with model: {model_size}")
         segments_list, transcription_info = transcribe_to_segments(denoised_audio_path, model_size, chunk_length)
         print(f"[INFO] Transcription complete")
 
-        # Clean up the temporary audio files
         if processed_audio_path and os.path.exists(processed_audio_path):
             os.remove(processed_audio_path)
         if denoised_audio_path and os.path.exists(denoised_audio_path):
             os.remove(denoised_audio_path)
         
-        # Classify
         try:
             hateful_segments = clf.extract_hateful(segments_list or [])
         except Exception as e:
-            # Don't break your existing flow; just log and return empty list
             print(f"ERROR: classification failed: {e}")
             hateful_segments = []
 
@@ -82,7 +77,6 @@ def preprocess_link(
             "transcription_info": transcription_info
         }
     except Exception as e:
-        # Clean up temporary files on error
         try:
             if processed_audio_path and os.path.exists(processed_audio_path):
                 os.remove(processed_audio_path)
@@ -91,18 +85,14 @@ def preprocess_link(
         except:
             pass
 
-        # Log the exception for debugging
         print(f"[ERROR] An error occurred during analysis: {e}")
         import traceback
         traceback.print_exc()
 
-        # Provide more specific error messages
         error_msg = str(e)
         if "allocate" in error_msg.lower() or "memory" in error_msg.lower():
             error_msg = "Memory error during processing. The audio file may be too long or corrupted."
-            # Re-raise as an HTTPException to send a specific error response
             raise HTTPException(status_code=500, detail=error_msg)
-        # Clean up temporary files on error
         try:
             if processed_audio_path and os.path.exists(processed_audio_path):
                 os.remove(processed_audio_path)
@@ -111,14 +101,11 @@ def preprocess_link(
         except:
             pass
 
-        # Log the exception for debugging
         print(f"[ERROR] An error occurred during analysis: {e}")
         import traceback
         traceback.print_exc()
 
-        # Provide more specific error messages
         error_msg = str(e)
         if "allocate" in error_msg.lower() or "memory" in error_msg.lower():
             error_msg = "Memory error during processing. The audio file may be too long or corrupted."
-            # Re-raise as an HTTPException to send a specific error response
     raise HTTPException(status_code=500, detail=error_msg)

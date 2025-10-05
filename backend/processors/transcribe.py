@@ -3,7 +3,6 @@ from faster_whisper import WhisperModel, BatchedInferencePipeline
 from tqdm import tqdm
 import os
 
-# --- Prevent BLAS/OpenMP oversubscription (good for CPU; harmless on GPU) ---
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 
@@ -11,7 +10,6 @@ _MODEL: WhisperModel | None = None
 _PIPELINE: BatchedInferencePipeline | None = None
 GPU: bool | None = None
 
-# Workers: default = all logical CPUs; allow override via env
 MAX_WORKERS = max(1, os.cpu_count() or 4)
 try:
     if "ASR_MAX_WORKERS" in os.environ:
@@ -25,7 +23,6 @@ def _ensure_pipeline(model_size: str = "small.en") -> BatchedInferencePipeline:
     if _PIPELINE is not None:
         return _PIPELINE
 
-    # Try GPU first
     try:
         print(f"[faster-whisper] init device=cuda, compute_type=float16, model={model_size}")
         model = WhisperModel(model_size, device="cuda", compute_type="float16")
@@ -54,13 +51,11 @@ def transcribe_to_segments(
     """
     pipe = _ensure_pipeline(model_size)
 
-    # Cap batch size a bit on CPU to avoid diminishing returns
     if GPU:
         batch_size = min(4, MAX_WORKERS)
     else:
         batch_size = 1 
 
-    # Create progress bar if requested
     pbar = None
     if show_progress:
         pbar = tqdm(desc="Transcribing", unit="seg", dynamic_ncols=True)
@@ -85,10 +80,8 @@ def transcribe_to_segments(
         hallucination_silence_threshold=0.5,
     )
 
-    # Parallelized for both CPU/GPU
     segments, info = pipe.transcribe(audio_path, batch_size=batch_size, **common)
 
-    # --- Merge decoder segments into sentence-level spans ---
     PUNCT = ('.', '!', '?')
     SILENCE_GAP = 0.7
 

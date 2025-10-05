@@ -4,14 +4,12 @@ import pandas as pd
 from streamlit_cookies_manager import EncryptedCookieManager
 import json
 
-# --- Page Config ---
 st.set_page_config(
     page_title="Audio Analyzer",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Inject custom CSS for a wider sidebar and bigger font
 st.markdown(
     """
     <style>
@@ -41,8 +39,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- Cookie Manager ---
-# This should be on the top of your script
 cookies = EncryptedCookieManager(
     prefix="audio_analyzer_",
     password=st.secrets["COOKIE_PASSWORD"],
@@ -51,13 +47,10 @@ cookies = EncryptedCookieManager(
 if not cookies.ready():
     st.stop()
 
-# --- Sidebar ---
 with st.sidebar:
     st.title("Extremism Screener")
     st.markdown("---")
 
-    # --- History ---
-    # The cache now stores {url: {'name': '...', 'analysis': ...}}
     cache_str = cookies.get('analysis_cache')
     analysis_cache = json.loads(cache_str) if cache_str else {}
 
@@ -67,9 +60,8 @@ with st.sidebar:
     if not history_urls:
         st.info("Your analyzed URLs will appear here.")
     else:
-        # Display history using the custom name
         for url_item in history_urls:
-            item_name = analysis_cache[url_item].get('name', url_item) # Fallback to URL if name doesn't exist
+            item_name = analysis_cache[url_item].get('name', url_item) 
             if st.button(item_name, key=f"history_{url_item}"):
                 st.session_state.analysis_results = analysis_cache[url_item]['analysis']
                 st.session_state.current_url = url_item
@@ -84,7 +76,6 @@ with st.sidebar:
         st.rerun()
 
 
-# --- Main Page ---
 st.markdown("<h2 style='text-align: center;'>Analyze Audio from URL</h2>", unsafe_allow_html=True)
 st.markdown(
     "<p style='text-align: center;'>Enter a URL to a video or audio file (e.g., YouTube, Reddit, or a direct link). "
@@ -92,11 +83,9 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Create a centered container with fixed max width
 col1, col2, col3 = st.columns([1, 2, 1])
 
 with col2:
-    # Create two columns for input and button side by side
     input_col, button_col = st.columns([4, 1])
     with input_col:
         url = st.text_input("URL to analyze", "", key="url_input", label_visibility="collapsed")
@@ -105,7 +94,7 @@ with col2:
 
 if analyze_button:
     if url:
-        st.session_state.current_url = url # Keep track of the submitted URL
+        st.session_state.current_url = url 
         if url in analysis_cache:
             st.session_state.analysis_results = analysis_cache[url]['analysis']
             st.session_state.audio_start_time = 0
@@ -123,7 +112,6 @@ if analyze_button:
                     st.session_state.analysis_results = data
                     st.session_state.audio_start_time = 0
 
-                    # --- Save to Cache with the fetched video title ---
                     video_title = data.get('video_title', f"Analysis - {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
                     analysis_cache[url] = {'name': video_title, 'analysis': data}
 
@@ -143,34 +131,28 @@ if analyze_button:
     else:
         st.warning("Please enter a URL to analyze.")
 
-# --- Results Display ---
 if 'analysis_results' in st.session_state:
     current_url = st.session_state.current_url
 
-    # --- Editable Title ---
     current_name = analysis_cache.get(current_url, {}).get('name', "Analysis")
     new_name = st.text_input("Analysis Name", value=current_name, key=f"rename_{current_url}")
 
-    # If name is changed, update the cache and cookie
     if new_name != current_name:
         analysis_cache[current_url]['name'] = new_name
         cookies['analysis_cache'] = json.dumps(analysis_cache)
         cookies.save()
-        st.rerun() # Rerun to update the sidebar
+        st.rerun() 
 
     data = st.session_state.analysis_results
 
-    # --- Original Link ---
     st.markdown(f"**URL:** [{current_url}]({current_url})")
 
-    # --- Audio Player ---
     st.subheader("Audio")
     if data.get("resolved_media_url"):
         st.audio(data["resolved_media_url"], start_time=st.session_state.get('audio_start_time', 0))
     else:
         st.warning("No audio could be resolved from the URL.")
 
-    # --- Editable Transcription List ---
     st.subheader("Flagged Segments")
     if 'transcription' in data and data['transcription']:
 
@@ -181,7 +163,6 @@ if 'analysis_results' in st.session_state:
             text = segment['text']
             labels = segment.get('labels', [])
 
-            # Display labels above the segment
             if labels:
                 label_texts = [f"{lbl['label']}" for lbl in labels]
                 st.markdown("Flagged for: " + " ".join(label_texts))
@@ -204,7 +185,6 @@ if 'analysis_results' in st.session_state:
             for index in sorted(segments_to_remove, reverse=True):
                 st.session_state.analysis_results['transcription'].pop(index)
 
-            # --- Update Cache in Cookie after edit ---
             analysis_cache[current_url]['analysis'] = st.session_state.analysis_results
             cookies['analysis_cache'] = json.dumps(analysis_cache)
             cookies.save()
@@ -213,7 +193,6 @@ if 'analysis_results' in st.session_state:
     else:
         st.warning("No content was flagged.")
 
-    # --- Expander for Raw Data ---
     with st.expander("Raw JSON Response"):
         st.json(st.session_state.analysis_results)
 
