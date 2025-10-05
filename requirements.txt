@@ -58,3 +58,7 @@ streamlit>=1.38
 pandas>=2.2
 requests>=2.32
 typing-extensions>=4.12
+streamlit
+requests
+pandas
+streamlit-cookies-manager
