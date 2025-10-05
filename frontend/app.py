@@ -21,6 +21,21 @@ st.markdown(
     [data-testid="stTextInput"] input {
         font-size: 1.25rem !important;
     }
+    button[kind="primary"] {
+        background-color: #0066CC !important;
+        color: white !important;
+        border: none !important;
+    }
+    button[kind="primary"]:hover {
+        background-color: #0052A3 !important;
+    }
+    button[kind="tertiary"] {
+        color: #FF3232 !important;
+        border: none !important;
+    }
+    button[kind="tertiary"]:hover {
+        color: #FF1919 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -29,6 +44,7 @@ st.markdown(
 # --- Cookie Manager ---
 # This should be on the top of your script
 cookies = EncryptedCookieManager(
+    prefix="audio_analyzer_",
     password=st.secrets["COOKIE_PASSWORD"],
 )
 
@@ -60,7 +76,7 @@ with st.sidebar:
                 st.session_state.audio_start_time = 0
                 st.rerun()
 
-    if st.button("Clear History"):
+    if st.button("Clear History", type="tertiary"):
         cookies['analysis_cache'] = json.dumps({})
         cookies.save()
         if 'analysis_results' in st.session_state:
@@ -155,7 +171,7 @@ if 'analysis_results' in st.session_state:
         st.warning("No audio could be resolved from the URL.")
 
     # --- Editable Transcription List ---
-    st.subheader("Transcription Segments")
+    st.subheader("Flagged Segments")
     if 'transcription' in data and data['transcription']:
 
         segments_to_remove = []
@@ -163,6 +179,12 @@ if 'analysis_results' in st.session_state:
         for i, segment in enumerate(data['transcription']):
             start_time = segment['start']
             text = segment['text']
+            labels = segment.get('labels', [])
+
+            # Display labels above the segment
+            if labels:
+                label_texts = [f"{lbl['label']}" for lbl in labels]
+                st.markdown("Flagged for: " + " ".join(label_texts))
 
             col1, col2, col3 = st.columns([2, 8, 2])
 
@@ -189,7 +211,7 @@ if 'analysis_results' in st.session_state:
             st.rerun()
 
     else:
-        st.warning("No transcription available.")
+        st.warning("No content was flagged.")
 
     # --- Expander for Raw Data ---
     with st.expander("Raw JSON Response"):

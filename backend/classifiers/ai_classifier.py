@@ -38,7 +38,7 @@ TARGET_HINTS = {
 class HateSpeechClassifier:
     def __init__(
         self,
-        model_name: str = "facebook/bart-large-mnli",  # good recall; swap if needed MoritzLaurer/deberta-v3-large-zeroshot-v2.0
+        model_name: str = "valhalla/distilbart-mnli-12-1",  # good recall; swap if needed MoritzLaurer/deberta-v3-large-zeroshot-v2.0
         device: int = 0 if torch.cuda.is_available() else -1,
         batch_size: int = 16,
 
