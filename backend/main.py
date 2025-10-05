@@ -24,6 +24,12 @@ async def root():
 
 
 
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
+
+
+
 @app.post("/analyze")
 def preprocess_link(
     link: str = Query(..., description="Page link to a video/audio (e.g. reddit/youtube)."),
@@ -31,6 +37,9 @@ def preprocess_link(
     model_size: str = Query("small.en"),
     chunk_length: int = Query(30),
 ):
+    processed_audio_path = None
+    denoised_audio_path = None
+
     processed_audio_path = None
     denoised_audio_path = None
 
@@ -64,6 +73,27 @@ def preprocess_link(
             "transcription_info": transcription_info
         }
     except Exception as e:
+        # Clean up temporary files on error
+        try:
+            if processed_audio_path and os.path.exists(processed_audio_path):
+                os.remove(processed_audio_path)
+            if denoised_audio_path and os.path.exists(denoised_audio_path):
+                os.remove(denoised_audio_path)
+        except:
+            pass
+
+        # Log the exception for debugging
+        print(f"[ERROR] An error occurred during analysis: {e}")
+        import traceback
+        traceback.print_exc()
+
+        # Provide more specific error messages
+        error_msg = str(e)
+        if "allocate" in error_msg.lower() or "memory" in error_msg.lower():
+            error_msg = "Memory error during processing. The audio file may be too long or corrupted."
+
+        # Re-raise as an HTTPException to send a specific error response
+        raise HTTPException(status_code=500, detail=error_msg)
         # Clean up temporary files on error
         try:
             if processed_audio_path and os.path.exists(processed_audio_path):
