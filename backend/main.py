@@ -31,28 +31,57 @@ def preprocess_link(
     model_size: str = Query("small.en"),
     chunk_length: int = Query(30),
 ):
+    processed_audio_path = None
+    denoised_audio_path = None
+
     try:
         # This now returns (audio_path, media_url, title)
+        print(f"[INFO] Extracting audio from: {link}")
         processed_audio_path, resolved_media_url, video_title = extract_audio_from_link(link)
-        
+        print(f"[INFO] Audio extracted: {processed_audio_path}")
+
         # Denoise the audio
+        print(f"[INFO] Denoising audio with strength: {strength}")
         denoised_audio_path = denoise_noisereduce(processed_audio_path, strength)
-        
+        print(f"[INFO] Audio denoised: {denoised_audio_path}")
+
         # Transcribe the denoised audio
-        transcription_data = transcribe_to_segments(denoised_audio_path, model_size)
+        print(f"[INFO] Transcribing audio with model: {model_size}")
+        segments_list, transcription_info = transcribe_to_segments(denoised_audio_path, model_size, chunk_length)
+        print(f"[INFO] Transcription complete")
 
         # Clean up the temporary audio files
-        os.remove(processed_audio_path)
-        os.remove(denoised_audio_path)
+        if processed_audio_path and os.path.exists(processed_audio_path):
+            os.remove(processed_audio_path)
+        if denoised_audio_path and os.path.exists(denoised_audio_path):
+            os.remove(denoised_audio_path)
 
         return {
             "message": "Analysis successful",
             "video_title": video_title,
             "resolved_media_url": resolved_media_url,
-            "transcription": transcription_data
+            "transcription": segments_list,
+            "transcription_info": transcription_info
         }
     except Exception as e:
+        # Clean up temporary files on error
+        try:
+            if processed_audio_path and os.path.exists(processed_audio_path):
+                os.remove(processed_audio_path)
+            if denoised_audio_path and os.path.exists(denoised_audio_path):
+                os.remove(denoised_audio_path)
+        except:
+            pass
+
         # Log the exception for debugging
-        print(f"An error occurred during analysis: {e}")
-        # Optionally, re-raise as an HTTPException to send a specific error response
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[ERROR] An error occurred during analysis: {e}")
+        import traceback
+        traceback.print_exc()
+
+        # Provide more specific error messages
+        error_msg = str(e)
+        if "allocate" in error_msg.lower() or "memory" in error_msg.lower():
+            error_msg = "Memory error during processing. The audio file may be too long or corrupted."
+
+        # Re-raise as an HTTPException to send a specific error response
+        raise HTTPException(status_code=500, detail=error_msg)
