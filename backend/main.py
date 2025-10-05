@@ -14,7 +14,7 @@ from backend.processors.transcribe import transcribe_to_segments
 from backend.classifiers.ai_classifier import HateSpeechClassifier
 
 clf = HateSpeechClassifier(
-    model_name="MoritzLaurer/deberta-v3-large-zeroshot-v2.0",
+    model_name="facebook/bart-large-mnli",
     global_threshold=0.52,
     escape_high_conf=0.82,
     smoothing_window=0,
