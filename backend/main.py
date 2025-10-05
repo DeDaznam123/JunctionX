@@ -11,6 +11,16 @@ from backend.utils.audio_io import url_to_wav
 from backend.processors.noisereduce_nr import denoise_noisereduce
 from backend.processors.vocal_extract import extract_vocals_hpss
 from backend.processors.transcribe import transcribe_to_segments
+from backend.classifiers.ai_classifier import HateSpeechClassifier
+clf = HateSpeechClassifier(
+    global_threshold=0.57,
+    label_thresholds={"Racist": 0.62, "Personal Attacks": 0.52},
+    smoothing_window=1,            # look at previous and next segment
+    smoothing_mode="weighted",     # "mean" is simpler; "weighted" often best
+    smoothing_weight_center=0.6,   # center more important
+    smoothing_weight_neighbor=0.2, # each neighbor
+    short_segment_penalty=0.05     # combats 1–2 word spikes
+)
 
 app = FastAPI(title="Extremism Screener API")
 
@@ -55,11 +65,20 @@ def preprocess_link(
         except Exception as e:
             raise HTTPException(500, f"transcription failed: {e}")
         info("INFO: Audio transcribed")
+        # Classify
+        try:
+            hateful_segments = clf.extract_hateful(transcript or [])
+        except Exception as e:
+            # Don't break your existing flow; just log and return empty list
+            print(f"ERROR: classification failed: {e}")
+            hateful_segments = []
+
         return JSONResponse({
             "status": "OK",
             "resolved_media_url": media_url,
             "outputs": {"wav_16k": cleaned.name},
             "transcription": transcript,
+            "hateful_segments": hateful_segments,   # <— added field (non-breaking)
             "info": info,
             "next_steps": [
                 "Tune thresholds & add classifier later."

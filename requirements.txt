@@ -47,3 +47,14 @@ webrtcvad
 librosa
 faster_whisper
 tqdm
+
+torch>=2.3
+transformers>=4.44
+accelerate>=0.33
+fastapi>=0.111
+uvicorn[standard]>=0.30
+pydantic[dotenv]>=2.8
+streamlit>=1.38
+pandas>=2.2
+requests>=2.32
+typing-extensions>=4.12
